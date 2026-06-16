@@ -1,0 +1,47 @@
+#
+# 自定义 feeds 清单（追加到源码树 feeds.conf 末尾）
+# 格式：源类型 包名 源地址 分支
+# 每行一条。被本文件引用的源会在 ./scripts/feeds update -a 时一并拉取。
+#
+# 注意：第三方源可能存在与官方源同名的包导致冲突。
+# 如遇 feeds install 报冲突，请注释掉对应行或调整顺序。
+#
+
+# ================ 科学上网 / 代理 ================
+# OpenClash：Clash 图形化客户端
+src-git openclash https://github.com/vernesong/OpenClash.git;dev
+
+# Nikki：基于 Mihomo 的透明代理（OpenClash 轻量平替）
+src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main
+
+# FullCombo Shark! (fchomo)：灵活定制 Mihomo
+src-git fchomo https://github.com/fcshark-org/openwrt-fchomo.git;main
+
+# luci-app-xray：全功能 Xray 客户端
+src-git lucixray https://github.com/yichya/luci-app-xray.git;main
+
+# NeKoBox：基于 sing-box/Mihomo 的家庭向代理工具
+src-git nekobox https://github.com/Thaolga/openwrt-nekobox.git;main
+
+# Daed：基于 eBPF 的代理平台
+src-git daed https://github.com/QiuSimons/luci-app-daed.git;main
+
+# ================ DNS 分流（mosdns 的 LuCI 界面）================
+# mosdns 核心包在官方源，但 LuCI 界面需作者仓库提供
+src-git mosdns https://github.com/sbwml/luci-app-mosdns.git;main
+
+# ================ 微信/TG 推送 ================
+# serverchan（Server酱微信推送）
+src-git serverchan https://github.com/immortalwrt-collections/luci-app-serverchan.git;master
+# wechatpush（微信推送增强版，支持企业微信/TG/Bark，二选一即可）
+src-git wechatpush https://github.com/etty228/luci-app-wechatpush.git;main
+
+# ================ 上网时间控制 / 家长控制 ================
+# timecontrol：上网行为管理（官方源可能不含，通过此源引入）
+src-git timecontrol https://github.com/immortalwrt-collections/luci-app-timecontrol.git;master
+
+# ================ 第三方插件聚合源（可选，按需启用）================
+# 如果觉得官方源插件不够，可以启用下面这些常用聚合源。
+# 注意：聚合源里的插件可能与官方源重名导致冲突，启用前请自行核对。
+# src-git small8 https://github.com/kenzok8/small-package.git;master
+# src-git small https://github.com/kenzok8/small.git;master
