@@ -104,6 +104,18 @@ jobs:
             ${{ runner.os }}-iw-${{ env.REPO_BRANCH }}-
 
       # --------------------------------------------------------------------
+      # 2.5 修复缓存恢复后的目录权限（actions/cache 以 root 恢复，openwrt 用户无法写入）
+      # --------------------------------------------------------------------
+      - name: Fix permissions after cache restore
+        run: |
+          # 缓存恢复的目录可能归 root 所有，统一改给 openwrt
+          if [ -d "immortalwrt" ]; then
+            sudo chown -R openwrt:openwrt immortalwrt
+          fi
+          # 确保 workspace 本身 openwrt 也可写
+          sudo chmod -R 777 $GITHUB_WORKSPACE
+
+      # --------------------------------------------------------------------
       # 3. 以 openwrt 用户身份克隆源码
       # --------------------------------------------------------------------
       - name: Clone source
