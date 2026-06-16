@@ -140,19 +140,21 @@ jobs:
       - name: Update & install feeds
         run: |
           cd immortalwrt
-          # 先更新官方 feeds（失败必须中断，否则无法继续）
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
 
-          # 对 feeds.conf 中声明的第三方 feed 逐个再 install 一次
-          # 官方 feeds install -a 已包含它们，这里冗余执行以容错：
-          # 某个第三方包 install 失败不影响其它包
-          for feed in openclash nikki fchomo lucixray nekobox daed mosdns serverchan wechatpush timecontrol; do
-            if grep -q "^src-git ${feed} " feeds.conf 2>/dev/null; then
-              echo "==== 单独 install 第三方 feed: ${feed} ===="
-              ./scripts/feeds install -a -p "${feed}" || echo "  [警告] ${feed} 安装部分包失败，已跳过（不影响主流程）"
-            fi
-          done
+          # 1) 更新官方 feeds（必须成功）
+          ./scripts/feeds update packages luci routing telephony
+          ./scripts/feeds install -a -p packages
+          ./scripts/feeds install -a -p luci
+          ./scripts/feeds install -a -p routing
+          ./scripts/feeds install -a -p telephony
+
+          # 2) 逐个更新并安装第三方 feeds（单个失败不影响其它）
+          while IFS= read -r line; do
+            feed=$(echo "$line" | awk '{print $2}')
+            echo "==== 更新并安装第三方 feed: ${feed} ===="
+            ./scripts/feeds update "${feed}" || { echo "  [跳过] ${feed} 更新失败"; continue; }
+            ./scripts/feeds install -a -p "${feed}" || echo "  [警告] ${feed} 安装部分包失败，已跳过"
+          done < <(grep '^src-git ' feeds.conf | grep -v -E 'src-git (packages|luci|routing|telephony) ')
 
       # --------------------------------------------------------------------
       # 6. 加载 .config 种子并补全依赖
