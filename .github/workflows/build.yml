@@ -70,8 +70,8 @@ jobs:
         uses: actions/checkout@v4
 
       # --------------------------------------------------------------------
-      # 1. 初始化编译环境（时区、依赖、普通用户权限）
-      #    ImmortalWrt 官方要求不能以 root 编译，故创建普通用户 openwrt
+      # 1. 初始化编译环境（时区、依赖）
+      #    GitHub Actions 的 runner 用户本身不是 root，可直接编译
       # --------------------------------------------------------------------
       - name: Setup build environment
         run: |
@@ -84,10 +84,6 @@ jobs:
             zlib1g-dev swig aria2 wget curl subversion jq python3 python3-pip \
             ccache libelf-dev device-tree-compiler libc6-dev libgmp-dev libmpc-dev \
             libmpfr-dev pkg-config
-          # 创建非 root 编译用户
-          sudo useradd -m -s /bin/bash openwrt || true
-          # 让 openwrt 用户可访问 workspace
-          sudo chmod -R 777 $GITHUB_WORKSPACE
           df -h /
 
       # --------------------------------------------------------------------
@@ -104,30 +100,17 @@ jobs:
             ${{ runner.os }}-iw-${{ env.REPO_BRANCH }}-
 
       # --------------------------------------------------------------------
-      # 2.5 修复缓存恢复后的目录权限（actions/cache 以 root 恢复，openwrt 用户无法写入）
-      # --------------------------------------------------------------------
-      - name: Fix permissions after cache restore
-        run: |
-          # 缓存恢复的目录可能归 root 所有，统一改给 openwrt
-          if [ -d "immortalwrt" ]; then
-            sudo chown -R openwrt:openwrt immortalwrt
-          fi
-          # 确保 workspace 本身 openwrt 也可写
-          sudo chmod -R 777 $GITHUB_WORKSPACE
-
-      # --------------------------------------------------------------------
-      # 3. 以 openwrt 用户身份克隆源码
+      # 3. 克隆源码（直接用 runner 用户，无需切换）
       # --------------------------------------------------------------------
       - name: Clone source
         run: |
-          cd $GITHUB_WORKSPACE
-          sudo -u openwrt bash <<CLONE
-            git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" immortalwrt
-            cd immortalwrt
-            # 记录 commit 便于追溯
-            echo "GIT_COMMIT=\$(git rev-parse --short HEAD)" > ../build-info.txt
-            echo "GIT_DATE=\$(git log -1 --format=%cd --date=format:%Y%m%d)" >> ../build-info.txt
-          CLONE
+          # 若缓存恢复了旧目录，先清理以便重新克隆
+          rm -rf immortalwrt
+          git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" immortalwrt
+          cd immortalwrt
+          # 记录 commit 便于追溯
+          echo "GIT_COMMIT=$(git rev-parse --short HEAD)" > ../build-info.txt
+          echo "GIT_DATE=$(git log -1 --format=%cd --date=format:%Y%m%d)" >> ../build-info.txt
 
       # --------------------------------------------------------------------
       # 4. 注入自定义 feeds（OpenClash 等外部源）+ 个性化脚本
@@ -153,21 +136,19 @@ jobs:
       - name: Update & install feeds
         run: |
           cd immortalwrt
-          sudo -u openwrt bash <<FEEDS
-            # 先更新官方 feeds（失败必须中断，否则无法继续）
-            ./scripts/feeds update -a
-            ./scripts/feeds install -a
+          # 先更新官方 feeds（失败必须中断，否则无法继续）
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
 
-            # 对 feeds.conf 中声明的第三方 feed 逐个再 install 一次
-            # 官方 feeds install -a 已包含它们，这里冗余执行以容错：
-            # 某个第三方包 install 失败不影响其它包
-            for feed in openclash nikki fchomo lucixray nekobox daed mosdns serverchan wechatpush timecontrol; do
-              if grep -q "^src-git \${feed} " feeds.conf 2>/dev/null; then
-                echo "==== 单独 install 第三方 feed: \${feed} ===="
-                ./scripts/feeds install -a -p "\${feed}" || echo "  [警告] \${feed} 安装部分包失败，已跳过（不影响主流程）"
-              fi
-            done
-          FEEDS
+          # 对 feeds.conf 中声明的第三方 feed 逐个再 install 一次
+          # 官方 feeds install -a 已包含它们，这里冗余执行以容错：
+          # 某个第三方包 install 失败不影响其它包
+          for feed in openclash nikki fchomo lucixray nekobox daed mosdns serverchan wechatpush timecontrol; do
+            if grep -q "^src-git ${feed} " feeds.conf 2>/dev/null; then
+              echo "==== 单独 install 第三方 feed: ${feed} ===="
+              ./scripts/feeds install -a -p "${feed}" || echo "  [警告] ${feed} 安装部分包失败，已跳过（不影响主流程）"
+            fi
+          done
 
       # --------------------------------------------------------------------
       # 6. 加载 .config 种子并补全依赖
@@ -184,13 +165,13 @@ jobs:
           fi
           # make defconfig：根据种子自动补全所有依赖项
           # 对无效/不存在的包名会静默丢弃，不报错
-          sudo -u openwrt make defconfig
+          make defconfig
 
           echo "==== 最终 .config 摘要（luci-app 与代理内核）===="
           grep -E "^CONFIG_PACKAGE_(luci-app|sing-box|xray|v2ray|mihomo|mosdns|smartdns|tailscale|zerotier|wireguard|frpc|frps|mwan3|nlbwmon|netdata|collectd|nikki|fchomo|nekobox|daed|v2raya)" .config | head -100
 
           echo ""
-          echo "==== ⚠️ 包存在性校验：被请求但未纳入的包（说明 feed 拉取失败或包名有误）===="
+          echo "==== 包存在性校验：被请求但未纳入的包（说明 feed 拉取失败或包名有误）===="
           # 对比种子里要求 =y 的包，哪些没出现在最终 .config 中
           MISSING=""
           while IFS= read -r line; do
@@ -206,7 +187,7 @@ jobs:
             for p in $MISSING; do echo "  - $p"; done
             echo "提示：若是第三方插件，检查 scripts/feeds.conf.custom 是否拉取成功"
           else
-            echo "  全部请求的包都已纳入 ✅"
+            echo "  全部请求的包都已纳入"
           fi
 
       # --------------------------------------------------------------------
@@ -215,7 +196,7 @@ jobs:
       - name: Download sources
         run: |
           cd immortalwrt
-          sudo -u openwrt make download -j"$MAKE_THREAD" V=s
+          make download -j"$MAKE_THREAD" V=s
           df -h /
 
       # --------------------------------------------------------------------
@@ -224,7 +205,7 @@ jobs:
       - name: Compile
         run: |
           cd immortalwrt
-          sudo -u openwrt make -j"$MAKE_THREAD" V=s
+          make -j"$MAKE_THREAD" V=s
           df -h /
 
       # --------------------------------------------------------------------
