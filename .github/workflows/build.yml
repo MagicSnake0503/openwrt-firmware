@@ -108,13 +108,14 @@ jobs:
       # --------------------------------------------------------------------
       - name: Clone source
         run: |
-          su openwrt -c '
+          cd $GITHUB_WORKSPACE
+          sudo -u openwrt bash <<CLONE
             git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" immortalwrt
             cd immortalwrt
             # 记录 commit 便于追溯
-            echo "GIT_COMMIT=$(git rev-parse --short HEAD)" > ../build-info.txt
-            echo "GIT_DATE=$(git log -1 --format=%cd --date=format:%Y%m%d)" >> ../build-info.txt
-          '
+            echo "GIT_COMMIT=\$(git rev-parse --short HEAD)" > ../build-info.txt
+            echo "GIT_DATE=\$(git log -1 --format=%cd --date=format:%Y%m%d)" >> ../build-info.txt
+          CLONE
 
       # --------------------------------------------------------------------
       # 4. 注入自定义 feeds（OpenClash 等外部源）+ 个性化脚本
@@ -140,7 +141,7 @@ jobs:
       - name: Update & install feeds
         run: |
           cd immortalwrt
-          su openwrt -c '
+          sudo -u openwrt bash <<FEEDS
             # 先更新官方 feeds（失败必须中断，否则无法继续）
             ./scripts/feeds update -a
             ./scripts/feeds install -a
@@ -149,12 +150,12 @@ jobs:
             # 官方 feeds install -a 已包含它们，这里冗余执行以容错：
             # 某个第三方包 install 失败不影响其它包
             for feed in openclash nikki fchomo lucixray nekobox daed mosdns serverchan wechatpush timecontrol; do
-              if grep -q "^src-git ${feed} " feeds.conf 2>/dev/null; then
-                echo "==== 单独 install 第三方 feed: ${feed} ===="
-                ./scripts/feeds install -a -p "${feed}" || echo "  [警告] ${feed} 安装部分包失败，已跳过（不影响主流程）"
+              if grep -q "^src-git \${feed} " feeds.conf 2>/dev/null; then
+                echo "==== 单独 install 第三方 feed: \${feed} ===="
+                ./scripts/feeds install -a -p "\${feed}" || echo "  [警告] \${feed} 安装部分包失败，已跳过（不影响主流程）"
               fi
             done
-          '
+          FEEDS
 
       # --------------------------------------------------------------------
       # 6. 加载 .config 种子并补全依赖
@@ -171,7 +172,7 @@ jobs:
           fi
           # make defconfig：根据种子自动补全所有依赖项
           # 对无效/不存在的包名会静默丢弃，不报错
-          su openwrt -c 'make defconfig'
+          sudo -u openwrt make defconfig
 
           echo "==== 最终 .config 摘要（luci-app 与代理内核）===="
           grep -E "^CONFIG_PACKAGE_(luci-app|sing-box|xray|v2ray|mihomo|mosdns|smartdns|tailscale|zerotier|wireguard|frpc|frps|mwan3|nlbwmon|netdata|collectd|nikki|fchomo|nekobox|daed|v2raya)" .config | head -100
@@ -202,7 +203,7 @@ jobs:
       - name: Download sources
         run: |
           cd immortalwrt
-          su openwrt -c "make download -j$MAKE_THREAD V=s"
+          sudo -u openwrt make download -j"$MAKE_THREAD" V=s
           df -h /
 
       # --------------------------------------------------------------------
@@ -211,7 +212,7 @@ jobs:
       - name: Compile
         run: |
           cd immortalwrt
-          su openwrt -c "make -j$MAKE_THREAD V=s"
+          sudo -u openwrt make -j"$MAKE_THREAD" V=s
           df -h /
 
       # --------------------------------------------------------------------
