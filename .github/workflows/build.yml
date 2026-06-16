@@ -140,6 +140,10 @@ jobs:
       - name: Update & install feeds
         run: |
           cd immortalwrt
+          echo "==== feeds.conf 内容 ===="
+          cat -A feeds.conf
+          echo "==== feeds.conf 前5行 hex ===="
+          head -5 feeds.conf | xxd | head -20
           # 先更新官方 feeds（失败必须中断，否则无法继续）
           ./scripts/feeds update -a
           ./scripts/feeds install -a
