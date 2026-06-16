@@ -120,14 +120,18 @@ jobs:
           cd immortalwrt
           # 追加自定义 feed（若 scripts/feeds.conf.custom 存在）
           if [ -f "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" ]; then
-            cat "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" >> feeds.conf
+            # 确保原文件末尾有换行，再追加（去掉 Windows CRLF 避免语法错误）
+            echo "" >> feeds.conf
+            tr -d '\r' < "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" >> feeds.conf
             echo "==== feeds.conf ===="
             cat feeds.conf
           fi
           # 运行第一段个性化脚本（改 IP/主机名/时区等，作用于源码树）
           if [ -f "$GITHUB_WORKSPACE/scripts/diy-part1.sh" ]; then
-            chmod +x "$GITHUB_WORKSPACE/scripts/diy-part1.sh"
-            "$GITHUB_WORKSPACE/scripts/diy-part1.sh" "$GITHUB_WORKSPACE" "$PWD"
+            # 去掉 Windows CRLF 避免 bash 解析错误
+            tr -d '\r' < "$GITHUB_WORKSPACE/scripts/diy-part1.sh" > /tmp/diy-part1.sh
+            chmod +x /tmp/diy-part1.sh
+            /tmp/diy-part1.sh "$GITHUB_WORKSPACE" "$PWD"
           fi
 
       # --------------------------------------------------------------------
@@ -160,8 +164,9 @@ jobs:
           cp "$GITHUB_WORKSPACE/$CONFIG_FILE" .config
           # 运行第二段个性化脚本（作用于 .config，例如追加自定义包）
           if [ -f "$GITHUB_WORKSPACE/scripts/diy-part2.sh" ]; then
-            chmod +x "$GITHUB_WORKSPACE/scripts/diy-part2.sh"
-            "$GITHUB_WORKSPACE/scripts/diy-part2.sh" "$GITHUB_WORKSPACE" "$PWD"
+            tr -d '\r' < "$GITHUB_WORKSPACE/scripts/diy-part2.sh" > /tmp/diy-part2.sh
+            chmod +x /tmp/diy-part2.sh
+            /tmp/diy-part2.sh "$GITHUB_WORKSPACE" "$PWD"
           fi
           # make defconfig：根据种子自动补全所有依赖项
           # 对无效/不存在的包名会静默丢弃，不报错
