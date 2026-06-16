@@ -120,11 +120,11 @@ jobs:
           cd immortalwrt
           # 追加自定义 feed（若 scripts/feeds.conf.custom 存在）
           if [ -f "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" ]; then
-            # 确保原文件末尾有换行，再追加（去掉 Windows CRLF 避免语法错误）
+            # 只提取 src-git 开头的行，跳过注释和空行（中文注释会导致 feeds 解析器报错）
             echo "" >> feeds.conf
-            tr -d '\r' < "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" >> feeds.conf
-            echo "==== feeds.conf ===="
-            cat feeds.conf
+            tr -d '\r' < "$GITHUB_WORKSPACE/scripts/feeds.conf.custom" | grep '^src-git ' >> feeds.conf
+            echo "==== feeds.conf（自定义部分）===="
+            grep '^src-git ' feeds.conf | tail -20
           fi
           # 运行第一段个性化脚本（改 IP/主机名/时区等，作用于源码树）
           if [ -f "$GITHUB_WORKSPACE/scripts/diy-part1.sh" ]; then
@@ -140,10 +140,6 @@ jobs:
       - name: Update & install feeds
         run: |
           cd immortalwrt
-          echo "==== feeds.conf 内容 ===="
-          cat -A feeds.conf
-          echo "==== feeds.conf 前5行 hex ===="
-          head -5 feeds.conf | xxd | head -20
           # 先更新官方 feeds（失败必须中断，否则无法继续）
           ./scripts/feeds update -a
           ./scripts/feeds install -a
