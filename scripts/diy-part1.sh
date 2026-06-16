@@ -36,7 +36,8 @@ sed -i "s/ImmortalWrt/${HOSTNAME}/g" package/base-files/files/bin/config_generat
 # 3. 修改时区为东八区、设置 NTP 服务器
 # ---------------------------------------------------------------------------
 TARGET_DIR="package/base-files/files/etc"
-# 时区
+# 时区（先确保目录存在）
+mkdir -p "${TARGET_DIR}/config"
 cat > "${TARGET_DIR}/config/system" <<'EOF'
 config system
 	option hostname 'ImmortalWrt'
